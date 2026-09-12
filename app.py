@@ -92,7 +92,7 @@ txt_ur = (
     "Main aap ki parhai ko aasan aur smart banane me madad kar sakta hoon 😊"
 )
 
-# Custom CSS
+# Custom CSS Styling
 st.markdown(
     """
     <style>
@@ -181,7 +181,7 @@ st.markdown(
 )
 
 
-# REST API Response Engine (Gemini API)
+# REST API Response Engine
 def get_ai_response(user_prompt, profile_data):
   try:
     if profile_data:
@@ -225,7 +225,17 @@ def get_ai_response(user_prompt, profile_data):
 
 # PAGE 1: LANDING PAGE
 if st.session_state["page"] == "landing":
-  display_text = txt_en if st.session_state.get("lang") == "EN" else txt_ur
+  lang_col1, lang_col2 = st.columns([4, 1])
+  with lang_col2:
+    if st.button(
+        "🌐 English" if st.session_state["lang"] == "UR" else "🌐 Roman Urdu"
+    ):
+      st.session_state["lang"] = (
+          "UR" if st.session_state["lang"] == "EN" else "EN"
+      )
+      st.rerun()
+
+  display_text = txt_en if st.session_state["lang"] == "EN" else txt_ur
   st.markdown(
       f"<div class='hero-title'>{display_text}</div>", unsafe_allow_html=True
   )
@@ -234,7 +244,12 @@ if st.session_state["page"] == "landing":
 
   col_center = st.columns([1, 2, 1])
   with col_center[1]:
-    if st.button("✨ I am excited to start our study journey!"):
+    button_text = (
+        "✨ I am excited to start our study journey!"
+        if st.session_state["lang"] == "EN"
+        else "✨ Aayein apni parhai ka safar shuru karein!"
+    )
+    if st.button(button_text):
       st.session_state["page"] = "chat_first"
       st.rerun()
 
