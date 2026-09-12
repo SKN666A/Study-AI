@@ -1,11 +1,9 @@
+import os
 import sqlite3
 import requests
 import streamlit as st
 
 # ---------------- API SETUP ----------------
-# Purani GEMINI_API_KEY wali line hata kar yeh 2 lines likhein:
-import os
-
 GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY"))
 
 # 1. Page Configuration & Cute Styling
@@ -13,6 +11,88 @@ st.set_page_config(
     page_title="Smart Study Buddy 🌸", page_icon="✨", layout="centered"
 )
 
+
+# ---------------- DATABASE LOGIC ----------------
+def get_user_from_db():
+  try:
+    conn = sqlite3.connect("students.db")
+    c = conn.cursor()
+    c.execute(
+        "SELECT username, class_val, score, mood, board, fav_sub, hate_sub,"
+        " dp_avatar FROM users_v3 ORDER BY ROWID DESC LIMIT 1"
+    )
+    row = c.fetchone()
+    conn.close()
+    if row:
+      return {
+          "nick": row[0],
+          "class": row[1],
+          "score": row[2],
+          "mood": row[3],
+          "board": row[4],
+          "fav_sub": row[5],
+          "hate_sub": row[6],
+          "dp": row[7],
+      }
+  except Exception:
+    return None
+  return None
+
+
+# 2. Database Setup
+conn = sqlite3.connect("students.db", check_same_thread=False)
+cursor = conn.cursor()
+cursor.execute(
+    """
+CREATE TABLE IF NOT EXISTS users_v3 (
+    username TEXT PRIMARY KEY, 
+    class_val TEXT, 
+    score TEXT, 
+    mood TEXT, 
+    board TEXT, 
+    fav_sub TEXT, 
+    hate_sub TEXT,
+    dp_avatar TEXT
+)
+"""
+)
+conn.commit()
+
+# ---------------- SESSION INITIALIZATION ----------------
+if "registered" not in st.session_state:
+  existing_user = get_user_from_db()
+  if existing_user:
+    st.session_state["registered"] = True
+    st.session_state["user_profile"] = existing_user
+    st.session_state["page"] = "chat_first"
+  else:
+    st.session_state["registered"] = False
+    st.session_state["user_profile"] = {}
+    st.session_state["page"] = "landing"
+
+if "lang" not in st.session_state:
+  st.session_state["lang"] = "EN"
+if "chat_history" not in st.session_state:
+  st.session_state["chat_history"] = []
+if "show_balloons" not in st.session_state:
+  st.session_state["show_balloons"] = False
+
+# Trackers
+if "user_nick" not in st.session_state:
+  st.session_state["user_nick"] = ""
+if "score_val" not in st.session_state:
+  st.session_state["score_val"] = ""
+if "fav_val" not in st.session_state:
+  st.session_state["fav_val"] = ""
+if "hate_val" not in st.session_state:
+  st.session_state["hate_val"] = ""
+
+txt_en = "Hey I am here to help you in study smartly and easily 😊"
+txt_ur = (
+    "Main aap ki parhai ko aasan aur smart banane me madad kar sakta hoon 😊"
+)
+
+# Custom CSS
 st.markdown(
     """
     <style>
@@ -100,54 +180,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# 2. Database Setup
-conn = sqlite3.connect("students.db", check_same_thread=False)
-cursor = conn.cursor()
-cursor.execute(
-    """
-CREATE TABLE IF NOT EXISTS users_v3 (
-    username TEXT PRIMARY KEY, 
-    class_val TEXT, 
-    score TEXT, 
-    mood TEXT, 
-    board TEXT, 
-    fav_sub TEXT, 
-    hate_sub TEXT,
-    dp_avatar TEXT
-)
-"""
-)
-conn.commit()
 
-# 3. Session State Initializations
-if "lang" not in st.session_state:
-  st.session_state["lang"] = "EN"
-if "page" not in st.session_state:
-  st.session_state["page"] = "landing"
-if "chat_history" not in st.session_state:
-  st.session_state["chat_history"] = []
-if "registered" not in st.session_state:
-  st.session_state["registered"] = False
-if "user_profile" not in st.session_state:
-  st.session_state["user_profile"] = {}
-if "show_balloons" not in st.session_state:
-  st.session_state["show_balloons"] = False
-
-# Trackers
-if "user_nick" not in st.session_state:
-  st.session_state["user_nick"] = ""
-if "score_val" not in st.session_state:
-  st.session_state["score_val"] = ""
-if "fav_val" not in st.session_state:
-  st.session_state["fav_val"] = ""
-if "hate_val" not in st.session_state:
-  st.session_state["hate_val"] = ""
-
-txt_en = "Hey I am here to help you in study smartly and easily 😊"
-txt_ur = "Main aap ki parhai ko aasan aur smart banane me madad kar sakta hoon 😊"
-
-
-# REST API Response Engine (Updated to gemini-3.6-flash)
+# REST API Response Engine (Gemini API)
 def get_ai_response(user_prompt, profile_data):
   try:
     if profile_data:
@@ -165,14 +199,12 @@ def get_ai_response(user_prompt, profile_data):
             """
     else:
       context = (
-          "You are a friendly AI Study Coach. Keep replies encouraging,"
-          " polite, and brief in Roman Urdu."
+          "You are a friendly AI Study Coach. Keep replies encouraging, polite,"
+          " and brief in Roman Urdu."
       )
 
     full_prompt = f"{context}\n\nUser Question: {user_prompt}"
-
-    # Updated Model Endpoint: gemini-3.6-flash
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
     payload = {"contents": [{"parts": [{"text": full_prompt}]}]}
 
     response = requests.post(url, json=payload)
@@ -189,25 +221,14 @@ def get_ai_response(user_prompt, profile_data):
     return f"Network Issue: {e}"
 
 
-# ---------------- MODULE 1: LANDING PAGE ----------------
-if st.session_state["page"] == "landing":
-  col_space, col_btn = st.columns([3, 2])
-  with col_btn:
-    if st.button(
-        "🌐 In Roman Urdu"
-        if st.session_state["lang"] == "EN"
-        else "🌐 Switch to English"
-    ):
-      st.session_state["lang"] = (
-          "UR" if st.session_state["lang"] == "EN" else "EN"
-      )
-      st.rerun()
+# ---------------- PAGE ROUTING ----------------
 
-  display_text = txt_en if st.session_state["lang"] == "EN" else txt_ur
+# PAGE 1: LANDING PAGE
+if st.session_state["page"] == "landing":
+  display_text = txt_en if st.session_state.get("lang") == "EN" else txt_ur
   st.markdown(
       f"<div class='hero-title'>{display_text}</div>", unsafe_allow_html=True
   )
-
   st.write("")
   st.write("")
 
@@ -217,7 +238,7 @@ if st.session_state["page"] == "landing":
       st.session_state["page"] = "chat_first"
       st.rerun()
 
-# ---------------- MODULE 2: DYNAMIC CHAT PAGE ----------------
+# PAGE 2: DYNAMIC CHAT PAGE
 elif st.session_state["page"] == "chat_first":
   if st.session_state["show_balloons"]:
     st.balloons()
@@ -230,7 +251,8 @@ elif st.session_state["page"] == "chat_first":
         unsafe_allow_html=True,
     )
     st.markdown(
-        f"<h3 style='text-align: center; color: #6c5ce7;'>Welcome back, {prof['nick']}! ✨</h3>",
+        "<h3 style='text-align: center; color: #6c5ce7;'>Welcome back,"
+        f" {prof.get('nick', 'Student')}! ✨</h3>",
         unsafe_allow_html=True,
     )
   else:
@@ -296,7 +318,7 @@ elif st.session_state["page"] == "chat_first":
       st.session_state["page"] = "signup"
       st.rerun()
 
-# ---------------- MODULE 3: ONBOARDING WITH INSTANT FEEDBACK ----------------
+# PAGE 3: PROFILE SIGNUP
 elif st.session_state["page"] == "signup":
   st.markdown(
       "<h2 style='text-align: center; color: #6c5ce7;'>🌸 Student Profile"
@@ -321,13 +343,10 @@ elif st.session_state["page"] == "signup":
           "🍟 Foodie",
           "😆 Smiling face",
           "😈 Magical Unicorn",
-
       ],
   )
   dp_icon = dp_choice.split()[0]
-  st.markdown(
-      f"<div class='dp-circle'>{dp_icon}</div>", unsafe_allow_html=True
-  )
+  st.markdown(f"<div class='dp-circle'>{dp_icon}</div>", unsafe_allow_html=True)
 
   nick = st.text_input("1. Your Nick Name (What should I call you? 😜)")
   if nick:
@@ -404,10 +423,9 @@ elif st.session_state["page"] == "signup":
   st.write("")
   if st.button("✨ Save & Complete Profile"):
     if nick and score and fav_sub and hate_sub:
-      cute_nick = f"{nick} ✨"
       cursor.execute(
           "INSERT OR REPLACE INTO users_v3 VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-          (cute_nick, cls, score, mood, board, fav_sub, hate_sub, dp_choice),
+          (nick, cls, score, mood, board, fav_sub, hate_sub, dp_choice),
       )
       conn.commit()
 
