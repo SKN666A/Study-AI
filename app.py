@@ -204,7 +204,7 @@ def get_ai_response(user_prompt, profile_data):
       )
 
     full_prompt = f"{context}\n\nUser Question: {user_prompt}"
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={GEMINI_API_KEY}"
     payload = {"contents": [{"parts": [{"text": full_prompt}]}]}
 
     response = requests.post(url, json=payload)
